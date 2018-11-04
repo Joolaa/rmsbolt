@@ -515,6 +515,15 @@ Return value is quoted for passing to the shell."
                       ">" output-filename)
                 " "))))
 
+(cl-defun rmsbolt--luajit-compile-cmd (&key src-buffer)
+  (rmsbolt--with-files
+   src-buffer
+   (let* ((cmd (buffer-local-value 'rmsbolt-command src-buffer))
+          (fileload (concat "'loadfile(\"" src-filename "\")'")))
+    (mapconcat #'identity
+               (list cmd "-jbc" "-e" fileload "2>" output-filename ">" "/dev/null")
+               " "))))
+
 (defun rmsbolt--hack-p (src-buffer)
   "Return non-nil if SRC-BUFFER should should use hhvm instead of php."
   (with-current-buffer src-buffer
@@ -557,6 +566,7 @@ https://github.com/derickr/vld"
                                 "-o" output-filename)
                           " ")))
      cmd)))
+
 (cl-defun rmsbolt--java-compile-cmd (&key src-buffer)
   "Process a compile command for ocaml.
 
@@ -683,6 +693,13 @@ https://github.com/derickr/vld"
                           :objdumper 'cat
                           :compile-cmd-function #'rmsbolt--java-compile-cmd
                           :process-asm-custom-fn #'rmsbolt--process-java-bytecode))
+   (lua-mode
+    . ,(make-rmsbolt-lang :compile-cmd "luajit"
+                          :supports-asm t
+                          :supports-disass nil
+                          :compile-cmd-function #'rmsbolt--luajit-compile-cmd
+                          :process-asm-custom-fn (lambda (_src-buffer lines)
+                                                   lines)))
    (emacs-lisp-mode
     . ,(make-rmsbolt-lang :supports-asm t
                           :supports-disass nil
