@@ -518,10 +518,9 @@ Return value is quoted for passing to the shell."
 (cl-defun rmsbolt--luajit-compile-cmd (&key src-buffer)
   (rmsbolt--with-files
    src-buffer
-   (let* ((cmd (buffer-local-value 'rmsbolt-command src-buffer))
-          (fileload (concat "'loadfile(\"" src-filename "\")'")))
+   (let ((cmd (buffer-local-value 'rmsbolt-command src-buffer)))
     (mapconcat #'identity
-               (list cmd "-jbc" "-e" fileload "2>" output-filename ">" "/dev/null")
+               (list cmd "-jbc" src-filename "2>" output-filename ">" "/dev/null")
                " "))))
 
 (defun rmsbolt--hack-p (src-buffer)
@@ -698,8 +697,7 @@ https://github.com/derickr/vld"
                           :supports-asm t
                           :supports-disass nil
                           :compile-cmd-function #'rmsbolt--luajit-compile-cmd
-                          :process-asm-custom-fn (lambda (_src-buffer lines)
-                                                   lines)))
+                          :process-asm-custom-fn #'rmsbolt--process-luajit-bytecode))
    (emacs-lisp-mode
     . ,(make-rmsbolt-lang :supports-asm t
                           :supports-disass nil
@@ -996,6 +994,18 @@ Argument SRC-BUFFER source buffer."
            (when (string-match "^filename:" line)
              (setq state 'text)))))
       (nreverse result))))
+
+(cl-defun rmsbolt--process-luajit-bytecode (_src-buffer asm-lines)
+  (let ((source-linum nil)
+        (result nil))
+    (dolist (line asm-lines)
+      (if (string-match (rx bol "-- BYTECODE -- " (0+ any) ":"
+                            (group (1+ digit)))
+                        line)
+        (setq source-linum (string-to-number (match-string 1 line))))
+      (unless (null source-linum) (add-text-properties 0 (length line) `(rmsbolt-src-line ,source-linum) line))
+      (push line result))
+    (nreverse result)))
 
 (cl-defun rmsbolt--process-python-bytecode (_src-buffer asm-lines)
   (let ((source-linum nil)
