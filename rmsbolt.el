@@ -520,7 +520,10 @@ Return value is quoted for passing to the shell."
    src-buffer
    (let ((cmd (buffer-local-value 'rmsbolt-command src-buffer)))
     (mapconcat #'identity
-               (list cmd "-jbc" src-filename "2>" output-filename ">" "/dev/null")
+               (list cmd "-jbc" src-filename "2>"
+                     output-filename ">"
+                     "/dev/null" "||"
+                     "true")
                " "))))
 
 (defun rmsbolt--hack-p (src-buffer)
@@ -997,14 +1000,18 @@ Argument SRC-BUFFER source buffer."
 
 (cl-defun rmsbolt--process-luajit-bytecode (_src-buffer asm-lines)
   (let ((source-linum nil)
-        (result nil))
+        (result nil)
+        (linenum-line-rx (rx bol "-- BYTECODE -- " (0+ any) ":"
+                             (group (1+ digit)))))
     (dolist (line asm-lines)
-      (if (string-match (rx bol "-- BYTECODE -- " (0+ any) ":"
-                            (group (1+ digit)))
+      (if (string-match linenum-line-rx
                         line)
         (setq source-linum (string-to-number (match-string 1 line))))
       (unless (null source-linum) (add-text-properties 0 (length line) `(rmsbolt-src-line ,source-linum) line))
-      (push line result))
+      (if (or (string-empty-p line)
+              (string-match (rx bol (1+ digit)) line)
+              (string-match linenum-line-rx line))
+          (push line result)))
     (nreverse result)))
 
 (cl-defun rmsbolt--process-python-bytecode (_src-buffer asm-lines)
